@@ -133,13 +133,14 @@ This section specifies the `RDCP Message Types` currently in use.
 | 0x0D  | `MAINTENANCE PREP`        | 0               | *sig*            | signature              | Switch single device to maintenance mode          |
 | 0x0E  | `RESET OF INFRASTRUCTURE` | 2               | 2 bytes + *sig*  | `Nonce`, signature     | Reset of all participating devices                |
 | 0x0F  | `ACKNOWLEDGMENT`          | 2               | 3 bytes + *sig*  | s`eq. Nr.`, signature  | Acknowledgment that message was received          |
-| 0x10  | `OFFICIAL ANNOUNCEMENT`   | 4               | 6 - 184 bytes    | binary/Unishox2 data   | Official announcement by an `HQ`                  |
+| 0x10  | `OFFICIAL ANNOUNCEMENT`   | 4               | 7 - 184 bytes    | binary/Unishox2 data   | Official announcement by an `HQ`                  |
 | 0x11  | `RESET OF OFF. ANN.`      | 2               | *sig*            | signature              | Revoke all previous `OFFICIAL ANNOUNCEMENTs`      |
-| 0x1A  | `CITITZEN REPORT`         | 4               | 0 - 184 bytes    | binary/Unishox2 data   | Message from `end-user` to `HQ`                   |
+| 0x1A  | `CITITZEN REPORT`         | 4               | 4 - 184 bytes    | binary/Unishox2 data   | Message from `end-user` to `HQ`                   |
 | 0x20  | `FETCH ALL NEW MESSAGES`  | 0               | 2 bytes          | `Sequence Number`      | `DA` fetches all new messages from other `DA`     |
 | 0x21  | `FETCH MESSAGE`           | 0               | 2 bytes          | `Reference Number`     | `DA` fetches specific message from other `DA`     |
 | 0x2A  | `DELIVERY RECEIPT`        | 0               | 0 bytes          | none                   | Signal that response to 0x20/0x21 is completed    |
 | 0x30  | `CRYPTOGRAPHIC SIGNATURE` | 4               | 2 bytes + *sig*  | binary data, signature | Separate signature for `OFFICIAL ANNOUNCEMENT`    |
+| 0x31  | `HEARTBEAT`               | 0               | 0 - 184 bytes    | binary data            | Heartbeat / device registration                   |
 
 ### RDCP Test messages
 
@@ -263,7 +264,8 @@ The payload of an `OFFICIAL ANNOUNCEMENT` (`OA`) consists of:
   - Values in the range between 60001 and 65534 specify the lifetime in full days (24h). For example, 60002 means 2 days, 60010 means 10 days.
   - A lifetime of 65535 (largest possible value in the 16-bit range) indicates infinite lifetime. Such messages can be explicitly deleted with a subtype 0x22 `OA`.
 - (8 bit) `More Fragments` (see below)
-- (0 - 178 bytes) `Content` of a new `OA` (see below) or (*sig*) Cryptographic signature for a `Subtype` 0x22 `OA`
+- (8 bit) Length of subsequent `Content` in bytes
+- (0 - 177 bytes) `Content` of a new `OA` (see below) or (*sig*) Cryptographic signature for a `Subtype` 0x22 `OA`
 
 `OAs` may be short, but typically contain longer text to keep the citizens well-informed with the necessary level of detail. For this reason, `OFFICIAL ANNOUNCEMENT` messages have the following specific characteristics:
 
@@ -272,7 +274,7 @@ The payload of an `OFFICIAL ANNOUNCEMENT` (`OA`) consists of:
 - `OFFICIAL ANNOUNCEMENT` messages to the `RDCP broadcast address` are accompanied by separate `CRYPTOGRAPHIC SIGNATURE` message to verify their `Origin`. For multi-fragment `OAs` only a single `CRYPTOGRAPHIC SIGNATURE` message is used (detailed below in the section about `CRYPTOGRAPHIC SIGNATURE` messages). The `CRYPTOGRAPHIC SIGNATURE` message may be sent before or after the `OA` (or all of its fragments). `DAs` and `MGs` should appropriately inform `end-users` about `OAs` if a cryptographic signature is still missing or its verification failed.
 - If the `HQ` device has a shared secret (cryptographic key material) established with the `Destination` device (unicast) or group (multicast), the complete `RDCP Payload` is encrypted and authenticated after the `Content` is Unishox2-compressed, with the s`tatic` `RDCP Header` fields as additional authenticated data (see below). In this case, there is no accompanying `CRYPTOGRAPHIC SIGNATURE` message.
 
-Implementations must ensure by proper splitting into fragments that the maximum `Content` length is not exceeded. 
+Implementations must ensure by proper splitting into fragments that the maximum `Content` length is not exceeded.
 
 An `RESET OF OFFICIAL ANNOUNCEMENT` message may be sent by an `HQ` device to trigger the deletion of all currently displayed/stored `OAs` on `DAs` and `MGs`. It is typically used at the end of crisis exercises or real crises to start fresh without removing all the other data that is deleted via the maintenance-category `RDCP Messages`. The `RDCP Payload` consists only of a cryptographic signature.
 
@@ -282,9 +284,9 @@ Only during a crisis, `DAs` and `MGs` as `end-user` devices can be used to send 
 
 The user interfaces for `end-user` devices distinguish between three types of `CITIZEN REPORTs`, and they typically use different forms that have to be filled out with different data.
 
-`Subtype` `EMERGENCY` messages are for reporting urgent, severe events involving life-threatening casualties that require assistance of highest priority to save lifes, such as medivac of a person in a hard-to-reach crisis area. `End-users` have to fill in the typical emergency report questions of "who reports?", "where is the emergency?", "what happened?" and "how many persons are affected?". The `Content` of the `RDCP Payload` of a `Subtype` `EMERGENCY` message concatenates the answers to these questions separated by the `#` symbol and is Unishox2-compressed. 
+`Subtype` `EMERGENCY` messages are for reporting urgent, severe events involving life-threatening casualties that require assistance of highest priority to save lifes, such as medivac of a person in a hard-to-reach crisis area. `End-users` have to fill in the typical emergency report questions of "who reports?", "where is the emergency?", "what happened?" and "how many persons are affected?". The `Content` of the `RDCP Payload` of a `Subtype` `EMERGENCY` message concatenates the answers to these questions separated by the `#` symbol and is Unishox2-compressed.
 
-`Subtype` `CITIZEN REQUEST` messages are used for still important, yet slightly less urgent reports by end users. The spectrum of potential reports is broad, ranging from observations of damaged public infrastructure (such as destroyed roads) and private property (damaged houses and flooded cellars) to a request to have groceries delivered somehow because households in a crisis area are running out of food and fresh water during a longer crisis. `End-users` typically have to answer "who reports?", select a type of request or observation from a list, and can enter a short text (about 100-150 characters) to describe their situation. Similar to above, the `Content` of the `RDCP Payload` of `Subtype` `CITIZEN REQUEST` messages concatenates this input and Unishox2-compresses it. 
+`Subtype` `CITIZEN REQUEST` messages are used for still important, yet slightly less urgent reports by end users. The spectrum of potential reports is broad, ranging from observations of damaged public infrastructure (such as destroyed roads) and private property (damaged houses and flooded cellars) to a request to have groceries delivered somehow because households in a crisis area are running out of food and fresh water during a longer crisis. `End-users` typically have to answer "who reports?", select a type of request or observation from a list, and can enter a short text (about 100-150 characters) to describe their situation. Similar to above, the `Content` of the `RDCP Payload` of `Subtype` `CITIZEN REQUEST` messages concatenates this input and Unishox2-compresses it.
 
 `Subtype` `RESPONSE TO INQUIRY` messages can only be sent if the `end-user` device previously received an `OFFICIAL ANNOUCEMENT` of `Subtype` 0x31. In such situations, the personnel at the active `HQ` device needs further information about a previous `CITIZEN REPORT` and `end-users` can fill in a free-text field in response. This `Content` is also Unishox2-compressed.
 
@@ -299,7 +301,8 @@ The plain-text `RDCP Payload` of `CITIZEN REPORT` messages consists of:
 - (16 bit) `Reference Number`:
   - `Nonce` for `Subtype` `EMERGENCY` and `CITIZEN REQUEST`
   - `Reference Number` of the previous `CITIZEN REPORT` for `Subtype` `RESPONSE TO INQUIRY`
-- (0-181 bytes) `Content` (Unishox2-compressed text)
+- (8 bit) Length of subsequent `Content` in bytes
+- (0-180 bytes) `Content` (Unishox2-compressed text)
 
 When the message is sent, the whole `RDCP Payload` is replaced by the ciphertext corresponding to the plaintext `RDCP Payload` using authenticated encryption with the s`tatic` `RDCP Header` fields (see below) as additional authenticated data.
 
@@ -332,11 +335,20 @@ The `RDCP Payload` of a `CRYPTOGRAPHIC SIGNATURE` message consists of:
 
 Details about cryptographic signature data are given below in the RDCP Message Authentication and Encryption section.
 
+### Heartbeat messages
+
+When the LoRa channel is otherwise free, `MGs` can optionally send `HEARTBEAT` messages periodically (e.g., every 30 minutes) to indicate that they are online. `HEARTBEAT` messages by `MGs` use the `HQ multicast address` as `Destination`, but are not relayed by `DAs`. They also use `0x0000` as `Sequence Number`, bypassing duplicate checks performed by `DAs`. `DAs` process these messages by recording the `Origin` and a timestamp. No `RDCP Payload` is used by `MGs`.
+
+`DAs` can optionally send aggregated `HEARTBEAT` messages to the `HQ multicast address` periodically (e.g., every 30 minutes), which are relayed and contain a valid `Sequence Number`. The `RDCP Payload` consists of:
+
+- (16 bit) Number of unique `MG` devices from which the `DA` has received at least one `HEARTBEAT` message since the last report.
+- (0-182 bytes) `RDCP addresses` of those `MGs` (16 bit each). This list is currently truncated if there are more than 91 relevant devices.
+
 ## RDCP Relaying and Flooding
 
 `RDCP Messages` with an `HQ` or `MG` device as `Origin` are first sent to an `Entry Point` `DA` over the 868 MHz LoRa channel. The `Entry Point` `DA` sends the message over the 433 MHz channel. At least one other `DA` is expected to receive the message. In the `RDCP Header`, up to three other `DAs` are designated as `First Hops`. Each first hop `Relay` sends the message after delaying for the assigned number of `Timeslots` and designates up to three `DAs` as `Second Hops`. This procedure is repeated until also the third hop `Relays` have sent the message.
 
-Therefore, the same message is sent multiple times by different `Senders` and each `Sender` (including `HQ` and `MG` devices) sends several `RDCP Message Types` multiple times according to the specified values for the `Retransmission Counter`. To ensure that each unique message is only processed once by each device, a `duplicate filtering` mechanism is used: `Properly received` `RDCP Messages` are checked for being already known based on their `Origin` and their `Sequence Number`. A message is only new if it uses a higher `Sequence Number` than any previous message by the same `Origin`. Messages that are not new are not processed any further; for this reason, re-sending old `OAs` is an uncritical operation (when responding to a `FETCH ALL NEW MESSAGES` request) and, e.g., `CITIZEN REPORT` messages not acknowledged by an `HQ` device must be sent with a fresh `Sequence Number` in a retry attempt.
+Therefore, the same message is sent multiple times by different `Senders` and each `Sender` (including `HQ` and `MG` devices) sends several `RDCP Message Types` multiple times according to the specified values for the `Retransmission Counter`. To ensure that each unique message is only processed once by each device, a `duplicate filtering` mechanism is used: `Properly received` `RDCP Messages` are checked for being already known based on their `Origin` and their `Sequence Number`. A message is only new if it uses a higher `Sequence Number` than any previous message by the same `Origin`. Messages that are not new are not processed any further; for this reason, re-sending old `OAs` is an uncritical operation (when responding to a `FETCH ALL NEW MESSAGES` request) and, e.g., `CITIZEN REPORT` messages not acknowledged by an `HQ` device must be sent with a fresh `Sequence Number` in a retry attempt. As an exception, `HEARTBEAT` messages sent by `MGs` use a fixed `Sequence Number` of `0x0000` but still are processed `DA`-internally; the intention here is to avoid `Sequence Number` overflows for `MGs`, which cannot be reset as easily as for the rest of the `RDCP Infrastructure`.
 
 An `RDCP Message` counts as `properly received` when it has a valid `Checksum` field in its `RDCP Header`. Messages with an invalid `Checksum` are treated as if they were never received, as any information contained in their `RDCP Header` and `RDCP Payload` are unreliable.
 
@@ -371,7 +383,7 @@ To avoid LoRa packet collisions during regular relaying, each `Relay/Delay` `RDC
 | 12         | `Second Hop` 9 | 0xF                | 0                |
 | 13         | Anyone         | 0xE                | 0xE              |
 
-When a `DA` receives an `RDCP Message` in which it is designated as `Relay`, it knows that it is a `First Hop` if the first designated `Relay` is assigned a `Delay` of 0. Similarly, it knows that it is a `Second Hop` if it was explicitly designated and only `Delays` greater than 0 are assigned. A `DA` is a `Third Hop` if it has not relayed the message before and the magic value 0xF is used as `Relay Identifier`. Currently, all `Third Hops` send in the same, final `Timeslot` despite this may cause LoRa packet collisions in parts of the overall topology. The rationale is that `Second Hops` are expected to be sufficient to completely cover the complete topology and letting "everyone who has not done so far" relay at the end of the `propagation cycle` serves as a safety margin if previous `Relays` were chosen awkwardly. Note that only those `DAs` will become actual `Third Hops` that received the message from a `Second Hop`; otherwise, the message is ignored based on the `duplicate filtering` mechanism. 
+When a `DA` receives an `RDCP Message` in which it is designated as `Relay`, it knows that it is a `First Hop` if the first designated `Relay` is assigned a `Delay` of 0. Similarly, it knows that it is a `Second Hop` if it was explicitly designated and only `Delays` greater than 0 are assigned. A `DA` is a `Third Hop` if it has not relayed the message before and the magic value 0xF is used as `Relay Identifier`. Currently, all `Third Hops` send in the same, final `Timeslot` despite this may cause LoRa packet collisions in parts of the overall topology. The rationale is that `Second Hops` are expected to be sufficient to completely cover the complete topology and letting "everyone who has not done so far" relay at the end of the `propagation cycle` serves as a safety margin if previous `Relays` were chosen awkwardly. Note that only those `DAs` will become actual `Third Hops` that received the message from a `Second Hop`; otherwise, the message is ignored based on the `duplicate filtering` mechanism.
 
 Similarly, when an `RDCP Message` is received, the unique combination of the two 4-bit values in the `Relay/Delay 1` field of the `RDCP Header` indicates the current `Timeslot` in the `propagation cycle` of the current message. In combination with the initial value of the `Retransmission Counter` header field and the size (and therefore airtime) of the LoRa packet, each recipient can derive when the `propagation cycle` will end and the channel is expected to be free again.
 
@@ -397,9 +409,9 @@ For authenticating `RDCP Messages` whose `RDCP Payload` includes a cryptographic
 
 Current prototype implementations use Schnorr signatures with *sig* = 65 bytes because of their "small" size.
 
-For `RDCP Messages` that integrate a cryptographic signature, it is created using a SHA-512 hash of the s`tatic RDCP Header fields`, i.e., `Origin`, `Sequence Number`, `Destination`, `Message Type`, and `Payload Length`, as well as the `RDCP Payload` excluding the signature itself. Other `RDCP Header` fields are not used for the hash calculation as they will change during the `propagation cycle`.
+For `RDCP Messages` that integrate a cryptographic signature, it is created using a SHA-256 hash of the `static RDCP Header fields`, i.e., `Origin`, `Sequence Number`, `Destination`, `Message Type`, and `Payload Length`, as well as the `RDCP Payload` excluding the signature itself. Other `RDCP Header` fields are not used for the hash calculation as they will change during the `propagation cycle`.
 
-For `CRYPTOGRAPHIC SIGNATURE` messages accompanying `OFFICIAL ANNOUNCEMENT` messages, the signature is created for a SHA-512 hash of the `RDCP Header` fields `Origin`, `Destination`, and `Message Type` as well as the `Subtype`, the `Reference Number`, the `Lifetime`, and the `More Fragments` field of the first fragment along with the concatenated `Contents` of all fragments (after their Unishox2-compression).
+For `CRYPTOGRAPHIC SIGNATURE` messages accompanying `OFFICIAL ANNOUNCEMENT` messages, the signature is created for a SHA-256 hash of the `RDCP Header` fields `Origin`, `Destination`, and `Message Type` as well as the `Subtype`, the `Reference Number`, the `Lifetime`, and the `More Fragments` field of the first fragment along with the concatenated `Contents` of all fragments (after their Unishox2-compression).
 
 For `CITIZEN REPORTs`, a shared secret 256-bit key specific for each non-`HQ` device (which is also stored on all `HQ` devices) is used for AES-256-GCM authenticated encryption using the static `RDCP Header` fields (see above) and the original `RDCP Payload` as cleartext, replacing the `RDCP Payload` with the resulting ciphertext. Note that the overall `RDCP Payload` size maximum must not be exceeded, limiting to 11 16-byte blocks.
 
@@ -415,3 +427,4 @@ For `OFFICIAL ANNOUNCEMENTs` that are sent to a unicast address, the same authen
 - We assume that in practice the traffic volume will still be rather low simply because we do not expect masses of `OFFICIAL ANNOUNCEMENTs` by public authorities or `CITIZEN REPORTs` by `end-users`, based on workshops held with autorities and citizens who experienced a real-world crisis in September, 2023.
 - However, one part of the prototype deployment in the ROLORAN research project in the `Neuhaus Scenario` is to gather telemetry data that gives more detailed insight into real-world usage during disaster exercises and, eventually, real crises.
 - Given the involvement of public authorities and emergency services, we will use these project results to determine whether dedicated frequencies or other special permits seem to be necessary or useful, and then update our recommendations for other RDCP `Scenarios`.
+

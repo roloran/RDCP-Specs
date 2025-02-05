@@ -133,9 +133,9 @@ This section specifies the `RDCP Message Types` currently in use.
 | 0x0D  | `MAINTENANCE PREP`        | 0               | *sig*            | signature              | Switch single device to maintenance mode          |
 | 0x0E  | `RESET OF INFRASTRUCTURE` | 2               | 2 bytes + *sig*  | `Nonce`, signature     | Reset of all participating devices                |
 | 0x0F  | `ACKNOWLEDGMENT`          | 2               | 3 bytes + *sig*  | s`eq. Nr.`, signature  | Acknowledgment that message was received          |
-| 0x10  | `OFFICIAL ANNOUNCEMENT`   | 4               | 7 - 184 bytes    | binary/Unishox2 data   | Official announcement by an `HQ`                  |
+| 0x10  | `OFFICIAL ANNOUNCEMENT`   | 4               | 6 - 184 bytes    | binary/Unishox2 data   | Official announcement by an `HQ`                  |
 | 0x11  | `RESET OF OFF. ANN.`      | 2               | *sig*            | signature              | Revoke all previous `OFFICIAL ANNOUNCEMENTs`      |
-| 0x1A  | `CITITZEN REPORT`         | 4               | 4 - 184 bytes    | binary/Unishox2 data   | Message from `end-user` to `HQ`                   |
+| 0x1A  | `CITITZEN REPORT`         | 4               | 3 - 184 bytes    | binary/Unishox2 data   | Message from `end-user` to `HQ`                   |
 | 0x20  | `FETCH ALL NEW MESSAGES`  | 0               | 2 bytes          | `Sequence Number`      | `DA` fetches all new messages from other `DA`     |
 | 0x21  | `FETCH MESSAGE`           | 0               | 2 bytes          | `Reference Number`     | `DA` fetches specific message from other `DA`     |
 | 0x2A  | `DELIVERY RECEIPT`        | 0               | 0 bytes          | none                   | Signal that response to 0x20/0x21 is completed    |
@@ -264,7 +264,6 @@ The payload of an `OFFICIAL ANNOUNCEMENT` (`OA`) consists of:
   - Values in the range between 60001 and 65534 specify the lifetime in full days (24h). For example, 60002 means 2 days, 60010 means 10 days.
   - A lifetime of 65535 (largest possible value in the 16-bit range) indicates infinite lifetime. Such messages can be explicitly deleted with a subtype 0x22 `OA`.
 - (8 bit) `More Fragments` (see below)
-- (8 bit) Length of subsequent `Content` in bytes
 - (0 - 177 bytes) `Content` of a new `OA` (see below) or (*sig*) Cryptographic signature for a `Subtype` 0x22 `OA`
 
 `OAs` may be short, but typically contain longer text to keep the citizens well-informed with the necessary level of detail. For this reason, `OFFICIAL ANNOUNCEMENT` messages have the following specific characteristics:
@@ -301,7 +300,6 @@ The plain-text `RDCP Payload` of `CITIZEN REPORT` messages consists of:
 - (16 bit) `Reference Number`:
   - `Nonce` for `Subtype` `EMERGENCY` and `CITIZEN REQUEST`
   - `Reference Number` of the previous `CITIZEN REPORT` for `Subtype` `RESPONSE TO INQUIRY`
-- (8 bit) Length of subsequent `Content` in bytes
 - (0-180 bytes) `Content` (Unishox2-compressed text)
 
 When the message is sent, the whole `RDCP Payload` is replaced by the ciphertext corresponding to the plaintext `RDCP Payload` using authenticated encryption with the s`tatic` `RDCP Header` fields (see below) as additional authenticated data.
@@ -413,9 +411,11 @@ For `RDCP Messages` that integrate a cryptographic signature, it is created usin
 
 For `CRYPTOGRAPHIC SIGNATURE` messages accompanying `OFFICIAL ANNOUNCEMENT` messages, the signature is created for a SHA-256 hash of the `RDCP Header` fields `Origin`, `Destination`, and `Message Type` as well as the `Subtype`, the `Reference Number`, the `Lifetime`, and the `More Fragments` field of the first fragment along with the concatenated `Contents` of all fragments (after their Unishox2-compression).
 
-For `CITIZEN REPORTs`, a shared secret 256-bit key specific for each non-`HQ` device (which is also stored on all `HQ` devices) is used for AES-256-GCM authenticated encryption using the static `RDCP Header` fields (see above) and the original `RDCP Payload` as cleartext, replacing the `RDCP Payload` with the resulting ciphertext. Note that the overall `RDCP Payload` size maximum must not be exceeded, limiting to 11 16-byte blocks.
+Separate `SIGNATURE` messages may be sent ahead of or after their corresponding `OAs`. It is recommended that `end-user` devices clearly indicate that an `OA's` authenticity could not be verified yet in the latter case, and remove `OAs` whose `SIGNATURE` was invalid. Implementations should also consider to remove `OAs` for which an accompanying `SIGNATURE` does not arrive within reasonable time.
 
-For `OFFICIAL ANNOUNCEMENTs` that are sent to a unicast address, the same authenticated encryption procedure is used. `End-user` devices must verify the authenticity of received `OAs` to their unicast `Destination` address, decrypt, and only then can process subheader fields such as `Subtype`.
+For `CITIZEN REPORTs`, a shared secret 256-bit key specific for each non-`HQ` device (which is also stored on all `HQ` devices) is used for AES-256-GCM authenticated encryption using the `static RDCP Header` fields (see above) as _additional data_ and the original `RDCP Payload` as plaintext, and then replacing the `RDCP Payload` with the resulting ciphertext. Note that the overall `RDCP Payload` size maximum must not be exceeded, also accounting for the 16-byte AES-256-GCM authentication tag. A unique IV is derived from the `static RDCP Header` fields per message.
+
+For `OFFICIAL ANNOUNCEMENTs` that are sent to a unicast address, the same authenticated encryption procedure is used as for `CITIZEN REPORTs`. `End-user` devices must verify the authenticity of received `OAs` sent to their unicast `Destination` address first, and only then can process decrypted subheader fields such as `Subtype`.
 
 ## Duty Cycle and Legal Considerations
 
@@ -427,4 +427,3 @@ For `OFFICIAL ANNOUNCEMENTs` that are sent to a unicast address, the same authen
 - We assume that in practice the traffic volume will still be rather low simply because we do not expect masses of `OFFICIAL ANNOUNCEMENTs` by public authorities or `CITIZEN REPORTs` by `end-users`, based on workshops held with autorities and citizens who experienced a real-world crisis in September, 2023.
 - However, one part of the prototype deployment in the ROLORAN research project in the `Neuhaus Scenario` is to gather telemetry data that gives more detailed insight into real-world usage during disaster exercises and, eventually, real crises.
 - Given the involvement of public authorities and emergency services, we will use these project results to determine whether dedicated frequencies or other special permits seem to be necessary or useful, and then update our recommendations for other RDCP `Scenarios`.
-

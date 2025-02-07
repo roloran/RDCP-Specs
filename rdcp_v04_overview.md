@@ -135,7 +135,7 @@ This section specifies the `RDCP Message Types` currently in use.
 | 0x0F  | `ACKNOWLEDGMENT`          | 2               | 3 bytes + *sig*  | s`eq. Nr.`, signature  | Acknowledgment that message was received          |
 | 0x10  | `OFFICIAL ANNOUNCEMENT`   | 4               | 6 - 184 bytes    | binary/Unishox2 data   | Official announcement by an `HQ`                  |
 | 0x11  | `RESET OF OFF. ANN.`      | 2               | *sig*            | signature              | Revoke all previous `OFFICIAL ANNOUNCEMENTs`      |
-| 0x1A  | `CITITZEN REPORT`         | 4               | 3 - 184 bytes    | binary/Unishox2 data   | Message from `end-user` to `HQ`                   |
+| 0x1A  | `CITIZEN REPORT`          | 4               | 3 - 184 bytes    | binary/Unishox2 data   | Message from `end-user` to `HQ`                   |
 | 0x20  | `FETCH ALL NEW MESSAGES`  | 0               | 2 bytes          | `Sequence Number`      | `DA` fetches all new messages from other `DA`     |
 | 0x21  | `FETCH MESSAGE`           | 0               | 2 bytes          | `Reference Number`     | `DA` fetches specific message from other `DA`     |
 | 0x2A  | `DELIVERY RECEIPT`        | 0               | 0 bytes          | none                   | Signal that response to 0x20/0x21 is completed    |
@@ -221,7 +221,8 @@ The `RDCP Payload` of `TIMESTAMP` messages is deliberately kept primitive to avo
 - (8 bit) minute (0, ..., 59)
 - (8 bit) `RDCP Infrastructure Mode` information:
   - 0x00: `RDCP Infrastructure` is currently in `non-crisis mode`
-  - 0x01: `RDCP Infrastructure` is currently in `crisis mode`
+  - 0x01: `RDCP Infrastructure` is currently in `crisis mode` and `HQ` is staffed
+  - 0x02: `RDCP Infrastructure` is currently in `crisis mode` but `HQ` is unmanned
 - (*sig*) Cryptographic signature
 
 ### RDCP Acknowledgment messages
@@ -234,6 +235,7 @@ RDCP `ACKNOWLEDGMENT` messages confirm that another (the confirmed) `RDCP Messag
 - (8 bit) `Type of acknowledgment`:
   - Value 0x00: `Positive acknowledgment` - the acknowledged message was technically received and will be processed further.
   - Value 0x01: `Negative acknowledgment` - the acknowledged message was technically received, but cannot be processed further. This is intended for situations in which `end-users` send a `CITIZEN REPORT` message, but the overall `RDCP Infrastructure` is not in `crisis mode` and therefore noone at an `HQ` device will be able to quickly react manually. Official `DA` and `MG` devices disable the sending of such messages when they are certain to be outside of an crisis situation, but depending on which messages those devices do and do not receive or when they are powered on, they may consider themselves in `crisis mode` although the rest of the `RDCP Infrastructure` is not.
+  - Value 0x02: `Positive negative acknowledgment` - the acknowledged message was technically received and will be processed further, but the `HQ` is currently unmanned.
 - (*sig*) Cryptographic signature
 
 The active `HQ` device and the `Entry Point` **must** respond to incoming `CITIZEN REPORT` messages with an `ACKNOWLEDGMENT`. The cryptographic signature is only mandatory for `HQ` devices currently, an `Entry Point` may omit it from the acknowledgment message. Messages to be acknowledged must have a unicast address as their `Origin`. Messages that have other `Origin` addresses are not acknowledged.
@@ -264,14 +266,14 @@ The payload of an `OFFICIAL ANNOUNCEMENT` (`OA`) consists of:
   - Values in the range between 60001 and 65534 specify the lifetime in full days (24h). For example, 60002 means 2 days, 60010 means 10 days.
   - A lifetime of 65535 (largest possible value in the 16-bit range) indicates infinite lifetime. Such messages can be explicitly deleted with a subtype 0x22 `OA`.
 - (8 bit) `More Fragments` (see below)
-- (0 - 177 bytes) `Content` of a new `OA` (see below) or (*sig*) Cryptographic signature for a `Subtype` 0x22 `OA`
+- (0 - 162/178 bytes) `Content` of a new `OA` (see below) or (*sig*) Cryptographic signature for a `Subtype` 0x22 `OA`
 
 `OAs` may be short, but typically contain longer text to keep the citizens well-informed with the necessary level of detail. For this reason, `OFFICIAL ANNOUNCEMENT` messages have the following specific characteristics:
 
 - The textual `Content` of an `OA` is compressed/encoded using Unishox2, an algorithm dedicated to compress and decompress short texts. It should include a human-readable timestamp of when the `OA` was sent by the `HQ` device.
-- If the Unishox2-compressed text does not fit into a single `OA` message (max. 178 bytes), it is split into the necessary number of parts. These parts are then referred to as "fragments" and each fragment is sent in an `OFFICIAL ANNOUNCEMENT` message of its own. All these fragments share the same `Reference Number`, and the recipient must use the `More Fragments` value to bring the fragments into the correct order. For example, if an `OA` is split into three fragments, the first fragment has a `More Fragments` value of 2, the second fragment has a `More Fragments` value of 1, and the final fragment has a `More Fragments` value of 0. Fragments must also be sent in this order, so the recipient knows from the beginning whether more fragments are to be expected and can also identify whether fragments are missing until the end of the assembled `Content`.
+- If the Unishox2-compressed text does not fit into a single `OA` message (max. 162/178 bytes), it is split into the necessary number of parts. These parts are then referred to as "fragments" and each fragment is sent in an `OFFICIAL ANNOUNCEMENT` message of its own. All these fragments share the same `Reference Number`, and the recipient must use the `More Fragments` value to bring the fragments into the correct order. For example, if an `OA` is split into three fragments, the first fragment has a `More Fragments` value of 2, the second fragment has a `More Fragments` value of 1, and the final fragment has a `More Fragments` value of 0. Fragments must also be sent in this order, so the recipient knows from the beginning whether more fragments are to be expected and can also identify whether fragments are missing until the end of the assembled `Content`.
 - `OFFICIAL ANNOUNCEMENT` messages to the `RDCP broadcast address` are accompanied by separate `CRYPTOGRAPHIC SIGNATURE` message to verify their `Origin`. For multi-fragment `OAs` only a single `CRYPTOGRAPHIC SIGNATURE` message is used (detailed below in the section about `CRYPTOGRAPHIC SIGNATURE` messages). The `CRYPTOGRAPHIC SIGNATURE` message may be sent before or after the `OA` (or all of its fragments). `DAs` and `MGs` should appropriately inform `end-users` about `OAs` if a cryptographic signature is still missing or its verification failed.
-- If the `HQ` device has a shared secret (cryptographic key material) established with the `Destination` device (unicast) or group (multicast), the complete `RDCP Payload` is encrypted and authenticated after the `Content` is Unishox2-compressed, with the s`tatic` `RDCP Header` fields as additional authenticated data (see below). In this case, there is no accompanying `CRYPTOGRAPHIC SIGNATURE` message.
+- If the `HQ` device has a shared secret (cryptographic key material) established with the `Destination` device (unicast) or group (multicast), the complete `RDCP Payload` is encrypted and authenticated after the `Content` is Unishox2-compressed, with the s`tatic` `RDCP Header` fields as additional authenticated data (see below). In this case, there is no accompanying `CRYPTOGRAPHIC SIGNATURE` message, but the 16-byte AES GCM AuthTag must be considered regarding maximum message length.
 
 Implementations must ensure by proper splitting into fragments that the maximum `Content` length is not exceeded.
 
@@ -300,13 +302,13 @@ The plain-text `RDCP Payload` of `CITIZEN REPORT` messages consists of:
 - (16 bit) `Reference Number`:
   - `Nonce` for `Subtype` `EMERGENCY` and `CITIZEN REQUEST`
   - `Reference Number` of the previous `CITIZEN REPORT` for `Subtype` `RESPONSE TO INQUIRY`
-- (0-180 bytes) `Content` (Unishox2-compressed text)
+- (0-165 bytes) `Content` (Unishox2-compressed text)
 
-When the message is sent, the whole `RDCP Payload` is replaced by the ciphertext corresponding to the plaintext `RDCP Payload` using authenticated encryption with the s`tatic` `RDCP Header` fields (see below) as additional authenticated data.
+When the message is sent, the whole `RDCP Payload` is replaced by the ciphertext corresponding to the plaintext `RDCP Payload` using authenticated encryption with the `static` `RDCP Header` fields (see below) as additional authenticated data. `Content` length is limited to 165 bytes as AES-256-GCM encryption adds a 16-byte AuthTag.
 
-`CITIZEN REPORT` messages expect two `ACKNOWLEDGMENT` messages as response, one by the `Entry Point` (this is important for `MGs`, but can be handled internally if the `end-user` message was entered at a `DA`), and one by the active `HQ` device. When the `RDCP Infrastructure` is in `crisis mode`, these must be `positive acknowledgments`; when the `RDCP Infrastructure` is in `non-crisis mode`, at least the `Entry Point` must send a `negative acknowledgment` (there may be no `HQ` device online in this case).
+`CITIZEN REPORT` messages expect two `ACKNOWLEDGMENT` messages as response, one by the `Entry Point` (this is important for `MGs`, but can be handled internally if the `end-user` message was entered at a `DA`), and one by the active `HQ` device. When the `RDCP Infrastructure` is in `crisis mode`, these must be `positive (negative) acknowledgments`; when the `RDCP Infrastructure` is in `non-crisis mode`, at least the `Entry Point` must send a `negative acknowledgment` (there may be no `HQ` device online in this case).
 
-If no `ACKNOWLEDGMENT` by the `Entry Point` is received within 60 seconds of sending a `CITIZEN REPORT` message on a free channel, the message must be sent as a new message (i.e., with a new `Sequence Number`) again. If the `Entry Point` sends a `positive acknowledgment`, but no `ACKNOWLEDGMENT` by an `HQ` device is received within 300 seconds, the message must also be sent again as a new message (i.e., with a new `Sequence Number`). If the `Entry Point` sends a `negative acknowledgment`, the `end-user` must be informed appropriately. `End-users` should also be informed about received `positive acknowledgments` and ongoing retry attempts. Automated retry attempts should stop after 5 times (i.e., roughly half an hour), as either the device is not in range of the `RDCP Infrastructure` or the `RDCP Infrastructure` is malfunctioning. `End-users` may retry to send their message manually at a later point in time in such an unfortunate case.
+If no `ACKNOWLEDGMENT` by the `Entry Point` is received within 60 seconds of sending a `CITIZEN REPORT` message on a free channel, the message must be sent as a new message (i.e., with a new `Sequence Number`) again. If the `Entry Point` sends a `positive (negative) acknowledgment`, but no `ACKNOWLEDGMENT` by an `HQ` device is received within 300 seconds, the message must also be sent again as a new message (i.e., with a new `Sequence Number`). If the `Entry Point` sends a `negative acknowledgment`, the `end-user` must be informed appropriately. `End-users` should also be informed about received `positive (negative) acknowledgments` and ongoing retry attempts. Automated retry attempts should stop after 5 times (i.e., roughly half an hour), as either the device is not in range of the `RDCP Infrastructure` or the `RDCP Infrastructure` is malfunctioning. `End-users` may retry to send their message manually at a later point in time in such an unfortunate case.
 
 ### RDCP messages related to fetching older RDCP messages
 

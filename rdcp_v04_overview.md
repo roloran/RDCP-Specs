@@ -1,7 +1,7 @@
 # RDCP v0.4 Quick Overview
 
 - RDCP is the ROLORAN Disaster Communication Protocol.
-- This document covers v0.4 of RDCP as of early 2025.
+- This document covers v0.4 of RDCP as of mid-2025.
 - RDCP is currently in development as part of the EU-funded (#NextGenerationEU) [dtec.bw research project ROLORAN](https://dtecbw.de/home/forschung/unibw-m/projekt-roloran) in cooperation with [Gemeinde Neuhaus, Austria](https://neuhaus.gv.at/).
 - This document shortly summarizes the most important aspects of RDCP for implementers and interested third parties. More detailed information is currently available only in German and project-internal, but might be published later.
 
@@ -141,7 +141,8 @@ This section specifies the `RDCP Message Types` currently in use.
 | 0x21  | `FETCH MESSAGE`           | 0               | 2 bytes          | `Reference Number`     | `DA` fetches specific message from other `DA`     |
 | 0x2A  | `DELIVERY RECEIPT`        | 0               | 0 bytes          | none                   | Signal that response to 0x20/0x21 is completed    |
 | 0x30  | `CRYPTOGRAPHIC SIGNATURE` | 4               | 2 bytes + *sig*  | binary data, signature | Separate signature for `OFFICIAL ANNOUNCEMENT`    |
-| 0x31  | `HEARTBEAT`               | 0               | 0 - 184 bytes    | binary data            | Heartbeat / device registration                   |
+| 0x31  | `HEARTBEAT`               | 0               | 4 - 184 bytes    | binary data            | Heartbeat / device registration                   |
+| 0x32  | `RTC`                     | 0               | 4 - 184 bytes    | binary data, signature | `DA`-specific `RTC`                               |
 
 ### RDCP Test messages
 
@@ -340,7 +341,7 @@ Details about cryptographic signature data are given below in the RDCP Message A
 
 ### Heartbeat messages
 
-When the LoRa channel is otherwise free, `MGs` can optionally send `HEARTBEAT` messages periodically (e.g., every 30 minutes) to indicate that they are online. `HEARTBEAT` messages by `MGs` use the `HQ multicast address` as `Destination`, but are not relayed by `DAs`. They also use `0x0000` as `Sequence Number`, bypassing duplicate checks performed by `DAs`. `DAs` process these messages by recording the `Origin` and a timestamp. No `RDCP Payload` is used by `MGs`.
+When the LoRa channel is otherwise free, `MGs` can optionally send `HEARTBEAT` messages periodically (e.g., every 30 minutes) to indicate that they are online. `HEARTBEAT` messages by `MGs` use the `HQ multicast address` as `Destination`, but are not relayed by `DAs`. They also use `0x0000` as `Sequence Number`, bypassing duplicate checks performed by `DAs`. `DAs` process these messages by recording the `Origin` and a timestamp. The `RDCP Payload` used by `MGs` consists of a 16-bit `OA` `Reference Number` (the latest persisted on the device) and the `RDCP address` of their current roaming recommendation `Entry Point`.
 
 `DAs` can optionally send aggregated `HEARTBEAT` messages to the `HQ multicast address` periodically (e.g., every 30 minutes), which are relayed and contain a valid `Sequence Number`. The `RDCP Payload` consists of:
 
